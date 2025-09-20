@@ -21,8 +21,13 @@ input { margin-top: 20px; padding: 8px; font-size: 18px; width: 150px; text-tran
 #stats { margin-top: 10px; font-size: 16px; color: #ccc; }
 #diamonds { margin-top: 10px; font-size: 18px; color: #00ffff; }
 /* popup */
-#popup { display:none; position: fixed; top:50%; left:50%; transform: translate(-50%, -50%); background:#222; padding:20px; border-radius:10px; box-shadow:0 0 10px #000; color:#eee; text-align:center; }
-#popup button { margin-top:10px; background:#ff4444; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; }
+#popup, #letter-panel { display:none; position: fixed; top:50%; left:50%; transform: translate(-50%, -50%); background:#222; padding:20px; border-radius:10px; box-shadow:0 0 10px #000; color:#eee; text-align:center; }
+#popup button, #letter-panel button { margin-top:10px; background:#ff4444; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; }
+#letter-panel h3 { margin-top:0; }
+.letter-box { display:inline-block; margin:3px; padding:8px 10px; border-radius:5px; font-weight:bold; background:#333; color:#eee; }
+.letter-green { background:#4caf50; color:#fff; }
+.letter-yellow { background:#ff9800; color:#fff; }
+.letter-gray { background:#555; color:#fff; }
 </style>
 </head>
 <body>
@@ -42,6 +47,7 @@ input { margin-top: 20px; padding: 8px; font-size: 18px; width: 150px; text-tran
   <button onclick="submitGuess()">Guess</button>
   <button onclick="useHint()">Hint (5💎)</button>
   <button onclick="resetProgress()">Reset Progress</button>
+  <button onclick="openLetterPanel()">Letter Panel</button>
 </div>
 <div id="message"></div>
 <div id="stats">Total Guesses: 0 | Best: -</div>
@@ -50,6 +56,12 @@ input { margin-top: 20px; padding: 8px; font-size: 18px; width: 150px; text-tran
 <div id="popup">
   <div id="popup-message"></div>
   <button onclick="closePopup()">X</button>
+</div>
+
+<div id="letter-panel">
+  <h3>Letter Panel</h3>
+  <div id="letters-grid"></div>
+  <button onclick="closeLetterPanel()">Close</button>
 </div>
 
 <script>
@@ -89,16 +101,33 @@ let levelsCorrect = JSON.parse(localStorage.getItem('levelsCorrect')) || Array(5
 let currentLevel = parseInt(localStorage.getItem('currentLevel')) || 0;
 let guesses = 0;
 let answer = '';
+let letterStatus = {}; // Track letters A–Z
+
+// Init all letters
+function resetLetterStatus(){
+  letterStatus={};
+  for(let i=65;i<=90;i++) letterStatus[String.fromCharCode(i)]='default';
+}
 
 // Switch mode
 function switchMode(m){
   mode = m;
   localStorage.setItem('mode',mode);
   guesses=0;
+  resetLetterStatus();
   document.getElementById('game').innerHTML='';
   document.getElementById('message').innerText='';
-  if(mode==='levels'){ document.getElementById('daily-info').innerText=''; startLevel(currentLevel); }
-  else { document.getElementById('level-info').innerText=''; startDaily(); }
+  document.getElementById('guess').disabled = false;
+  document.querySelector('button[onclick="submitGuess()"]').disabled = false;
+
+  if(mode==='levels'){ 
+    document.getElementById('daily-info').innerText=''; 
+    startLevel(currentLevel); 
+  }
+  else { 
+    document.getElementById('level-info').innerText=''; 
+    startDaily(); 
+  }
   updateStats(); updateDiamonds();
 }
 
@@ -107,6 +136,7 @@ function startLevel(lvl){
   currentLevel = lvl;
   answer = levels[currentLevel];
   guesses=0;
+  resetLetterStatus();
   document.getElementById('level-info').innerText=`Level ${currentLevel+1}`;
   document.getElementById('message').innerText='';
   document.getElementById('game').innerHTML='';
@@ -118,6 +148,7 @@ function startDaily(){
   const today = new Date();
   answer = getDailyWordByDate(today);
   guesses=0;
+  resetLetterStatus();
   const options={year:'numeric',month:'long',day:'numeric'};
   const todayStr = today.toLocaleDateString(undefined,options);
   document.getElementById('daily-info').innerText=`Daily Word for ${todayStr}`;
@@ -176,7 +207,17 @@ function submitGuess(){
   let result=Array(5).fill('absent');
   for(let i=0;i<5;i++){ if(guess[i]===answer[i]){ result[i]='correct'; answerLetterCount[guess[i]]--; } }
   for(let i=0;i<5;i++){ if(result[i]!=='correct' && answerLetterCount[guess[i]]>0){ result[i]='present'; answerLetterCount[guess[i]]--; } }
-  for(let i=0;i<5;i++){ const cell=document.createElement('div'); cell.classList.add('cell',result[i]); cell.innerText=guess[i]; row.appendChild(cell); }
+  for(let i=0;i<5;i++){ 
+    const cell=document.createElement('div'); 
+    cell.classList.add('cell',result[i]); 
+    cell.innerText=guess[i]; 
+    row.appendChild(cell); 
+
+    // Update letter status
+    if(result[i]==='correct') letterStatus[guess[i]]='green';
+    else if(result[i]==='present' && letterStatus[guess[i]]!=='green') letterStatus[guess[i]]='yellow';
+    else if(result[i]==='absent' && letterStatus[guess[i]]==='default') letterStatus[guess[i]]='gray';
+  }
   document.getElementById('game').appendChild(row);
   input.value='';
 
@@ -229,6 +270,26 @@ function closePopup(){
   if(mode==='levels'){ if(currentLevel<49) startLevel(currentLevel+1); else document.getElementById('message').innerText="Game Over!"; }
 }
 
+// Letter Panel
+function openLetterPanel(){
+  const grid=document.getElementById('letters-grid');
+  grid.innerHTML='';
+  for(let i=65;i<=90;i++){
+    let letter=String.fromCharCode(i);
+    let span=document.createElement('span');
+    span.innerText=letter;
+    span.classList.add('letter-box');
+    if(letterStatus[letter]==='green') span.classList.add('letter-green');
+    else if(letterStatus[letter]==='yellow') span.classList.add('letter-yellow');
+    else if(letterStatus[letter]==='gray') span.classList.add('letter-gray');
+    grid.appendChild(span);
+  }
+  document.getElementById('letter-panel').style.display='block';
+}
+function closeLetterPanel(){
+  document.getElementById('letter-panel').style.display='none';
+}
+
 // Reset
 function resetProgress(){
   if(confirm("Reset all progress?")){
@@ -238,12 +299,14 @@ function resetProgress(){
     diamonds=5;
     levelsCorrect=Array(50).fill(false);
     currentLevel=0;
+    resetLetterStatus();
     if(mode==='levels') startLevel(0); else startDaily();
     updateStats(); updateDiamonds();
   }
 }
 
 // Start
+resetLetterStatus();
 if(mode==='levels') switchMode('levels'); else switchMode('daily');
 </script>
 
