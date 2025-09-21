@@ -9,7 +9,7 @@ body { font-family: sans-serif; background: #111; color: #eee; display: flex; fl
 h1 { margin-top: 20px; font-size: 28px; color: #ffcc00; text-shadow: 1px 1px 5px #000; }
 #mode-selector { margin-top:10px; }
 button { margin:5px; padding: 8px 12px; font-size: 16px; cursor: pointer; background: #ffcc00; border: none; border-radius: 5px; color: #111; font-weight: bold; }
-#level-info, #daily-info { margin-top: 10px; font-size: 20px; }
+#level-info, #daily-info, #four-info { margin-top: 10px; font-size: 20px; }
 #game { margin-top: 20px; }
 .row { display: flex; margin: 5px; }
 .cell { width: 50px; height: 50px; margin: 3px; display: flex; justify-content: center; align-items: center; font-size: 24px; font-weight: bold; background: #333; border-radius: 8px; transition: transform 0.2s, background 0.2s; }
@@ -37,10 +37,12 @@ input { margin-top: 20px; padding: 8px; font-size: 18px; width: 150px; text-tran
 <div id="mode-selector">
   <button onclick="switchMode('levels')">50-Level Game</button>
   <button onclick="switchMode('daily')">Daily Word</button>
+  <button onclick="unlockFourMode()">4-Letters Mode (25💎)</button>
 </div>
 
 <div id="level-info"></div>
 <div id="daily-info"></div>
+<div id="four-info"></div>
 <div id="game"></div>
 <div>
   <input type="text" id="guess" maxlength="5" placeholder="Type your guess">
@@ -82,6 +84,12 @@ const dailyWordsList = [
   "GLASS","HEART","INDEX","LEMON","MOUNT","PRISM","TWEAK","VOUCH","WALTZ","YIELD"
 ];
 
+// Four-letter words
+const fourWords = [
+  "TREE","GAME","LION","FISH","ROAD","MOON","FIRE","KING","SALT","WIND",
+  "COOL","COLD","FAST","DARK","GOLD","LOVE","BIRD","BOOK","TIME","STAR"
+];
+
 function getDailyWordByDate(date){
   const start = new Date("2025-09-20");
   const today = new Date(date);
@@ -94,19 +102,34 @@ function getDailyWordByDate(date){
 let mode = localStorage.getItem('mode') || 'levels';
 let stats = {
   levels: JSON.parse(localStorage.getItem('levelsStats')) || {total:0,best:null},
-  daily: JSON.parse(localStorage.getItem('dailyStats')) || {total:0,best:null}
+  daily: JSON.parse(localStorage.getItem('dailyStats')) || {total:0,best:null},
+  four: JSON.parse(localStorage.getItem('fourStats')) || {total:0,best:null}
 };
 let diamonds = parseInt(localStorage.getItem('diamonds')) || 5;
 let levelsCorrect = JSON.parse(localStorage.getItem('levelsCorrect')) || Array(50).fill(false);
 let currentLevel = parseInt(localStorage.getItem('currentLevel')) || 0;
 let guesses = 0;
 let answer = '';
-let letterStatus = {}; // Track letters A–Z
+let letterStatus = {}; 
+let fourUnlocked = JSON.parse(localStorage.getItem('fourUnlocked')) || false;
 
 // Init all letters
 function resetLetterStatus(){
   letterStatus={};
   for(let i=65;i<=90;i++) letterStatus[String.fromCharCode(i)]='default';
+}
+
+// Unlock 4-letter mode
+function unlockFourMode(){
+  if(fourUnlocked){ switchMode('four'); return; }
+  if(diamonds<25){ alert("Not enough diamonds to unlock!"); return; }
+  if(confirm("Unlock 4-Letters Mode for 25 diamonds?")){
+    diamonds-=25;
+    fourUnlocked=true;
+    localStorage.setItem('fourUnlocked',true);
+    updateDiamonds();
+    switchMode('four');
+  }
 }
 
 // Switch mode
@@ -120,14 +143,14 @@ function switchMode(m){
   document.getElementById('guess').disabled = false;
   document.querySelector('button[onclick="submitGuess()"]').disabled = false;
 
-  if(mode==='levels'){ 
-    document.getElementById('daily-info').innerText=''; 
-    startLevel(currentLevel); 
-  }
-  else { 
-    document.getElementById('level-info').innerText=''; 
-    startDaily(); 
-  }
+  document.getElementById('level-info').innerText='';
+  document.getElementById('daily-info').innerText='';
+  document.getElementById('four-info').innerText='';
+
+  if(mode==='levels'){ startLevel(currentLevel); }
+  else if(mode==='daily'){ startDaily(); }
+  else if(mode==='four'){ startFour(); }
+
   updateStats(); updateDiamonds();
 }
 
@@ -138,8 +161,8 @@ function startLevel(lvl){
   guesses=0;
   resetLetterStatus();
   document.getElementById('level-info').innerText=`Level ${currentLevel+1}`;
-  document.getElementById('message').innerText='';
-  document.getElementById('game').innerHTML='';
+  document.getElementById('guess').maxLength=5;
+  document.getElementById('guess').placeholder="Type your guess";
   updateStats(); saveState();
 }
 
@@ -152,8 +175,8 @@ function startDaily(){
   const options={year:'numeric',month:'long',day:'numeric'};
   const todayStr = today.toLocaleDateString(undefined,options);
   document.getElementById('daily-info').innerText=`Daily Word for ${todayStr}`;
-  document.getElementById('message').innerText='';
-  document.getElementById('game').innerHTML='';
+  document.getElementById('guess').maxLength=5;
+  document.getElementById('guess').placeholder="Type your guess";
 
   const lastDaily = localStorage.getItem('lastDailyPlay');
   const todayISO = today.toISOString().split("T")[0];
@@ -161,16 +184,24 @@ function startDaily(){
     document.getElementById('message').innerText="You have already played today's word!";
     document.getElementById('guess').disabled = true;
     document.querySelector('button[onclick="submitGuess()"]').disabled = true;
-  } else {
-    document.getElementById('guess').disabled = false;
-    document.querySelector('button[onclick="submitGuess()"]').disabled = false;
   }
   updateStats(); updateDiamonds();
 }
 
+// Start 4-letter
+function startFour(){
+  answer = fourWords[Math.floor(Math.random()*fourWords.length)];
+  guesses=0;
+  resetLetterStatus();
+  document.getElementById('four-info').innerText=`4-Letters Mode`;
+  document.getElementById('guess').maxLength=4;
+  document.getElementById('guess').placeholder="Type 4-letter word";
+  updateStats(); saveState();
+}
+
 // Update stats + diamonds
 function updateStats(){
-  let s = mode==='levels'?stats.levels:stats.daily;
+  let s = mode==='levels'?stats.levels:mode==='daily'?stats.daily:stats.four;
   let best = s.best===null?'-':s.best;
   document.getElementById('stats').innerText=`Total Guesses: ${s.total} | Best: ${best}`;
 }
@@ -183,20 +214,22 @@ function updateDiamonds(){
 function saveState(){
   localStorage.setItem('levelsStats',JSON.stringify(stats.levels));
   localStorage.setItem('dailyStats',JSON.stringify(stats.daily));
+  localStorage.setItem('fourStats',JSON.stringify(stats.four));
   localStorage.setItem('levelsCorrect',JSON.stringify(levelsCorrect));
   localStorage.setItem('currentLevel',currentLevel);
   localStorage.setItem('mode',mode);
   localStorage.setItem('diamonds',diamonds);
+  localStorage.setItem('fourUnlocked',fourUnlocked);
 }
 
 // Submit guess
 function submitGuess(){
   const input = document.getElementById('guess');
   let guess = input.value.toUpperCase();
-  if(guess.length!==5){ alert("Word must be 5 letters"); return; }
+  if(guess.length!==answer.length){ alert(`Word must be ${answer.length} letters`); return; }
 
   guesses++;
-  let s = mode==='levels'?stats.levels:stats.daily;
+  let s = mode==='levels'?stats.levels:mode==='daily'?stats.daily:stats.four;
   s.total++;
   updateStats();
 
@@ -204,16 +237,15 @@ function submitGuess(){
   let answerLetterCount={};
   for(let char of answer) answerLetterCount[char]=(answerLetterCount[char]||0)+1;
 
-  let result=Array(5).fill('absent');
-  for(let i=0;i<5;i++){ if(guess[i]===answer[i]){ result[i]='correct'; answerLetterCount[guess[i]]--; } }
-  for(let i=0;i<5;i++){ if(result[i]!=='correct' && answerLetterCount[guess[i]]>0){ result[i]='present'; answerLetterCount[guess[i]]--; } }
-  for(let i=0;i<5;i++){ 
+  let result=Array(answer.length).fill('absent');
+  for(let i=0;i<answer.length;i++){ if(guess[i]===answer[i]){ result[i]='correct'; answerLetterCount[guess[i]]--; } }
+  for(let i=0;i<answer.length;i++){ if(result[i]!=='correct' && answerLetterCount[guess[i]]>0){ result[i]='present'; answerLetterCount[guess[i]]--; } }
+  for(let i=0;i<answer.length;i++){ 
     const cell=document.createElement('div'); 
     cell.classList.add('cell',result[i]); 
     cell.innerText=guess[i]; 
     row.appendChild(cell); 
 
-    // Update letter status
     if(result[i]==='correct') letterStatus[guess[i]]='green';
     else if(result[i]==='present' && letterStatus[guess[i]]!=='green') letterStatus[guess[i]]='yellow';
     else if(result[i]==='absent' && letterStatus[guess[i]]==='default') letterStatus[guess[i]]='gray';
@@ -222,8 +254,7 @@ function submitGuess(){
   input.value='';
 
   if(guess===answer){
-    // Rewards
-    let earned = Math.max(0, 6-guesses);
+    let earned = Math.max(0, (answer.length+1)-guesses);
     diamonds += earned;
     if(s.best===null || guesses<s.best) s.best=guesses;
     updateStats(); updateDiamonds();
@@ -234,26 +265,31 @@ function submitGuess(){
       document.getElementById('message').innerText=`Correct! You earned ${earned} 💎. Moving on.`;
       if(currentLevel<49) setTimeout(()=>startLevel(currentLevel+1),1500);
       else document.getElementById('message').innerText="Congratulations! All 50 levels completed!";
-    } else {
+    } else if(mode==='daily'){
       localStorage.setItem('lastDailyPlay', new Date().toISOString().split("T")[0]);
       saveState();
       document.getElementById('message').innerText=`Correct! You earned ${earned} 💎. See you tomorrow!`;
       document.getElementById('guess').disabled=true;
       document.querySelector('button[onclick="submitGuess()"]').disabled=true;
+    } else {
+      document.getElementById('message').innerText=`Correct! You earned ${earned} 💎. New word loaded!`;
+      saveState();
+      setTimeout(()=>startFour(),1500);
     }
   } else if(guesses>=5){
-    if(mode==='levels'){ levelsCorrect[currentLevel]=false; saveState(); showPopup(answer); }
-    else { localStorage.setItem('lastDailyPlay', new Date().toISOString().split("T")[0]); saveState(); document.getElementById('guess').disabled=true; document.querySelector('button[onclick="submitGuess()"]').disabled=true; showPopup(answer); }
+    showPopup(answer);
+    if(mode==='daily'){ localStorage.setItem('lastDailyPlay', new Date().toISOString().split("T")[0]); }
+    saveState();
   }
 }
 
 // Hints
 function useHint(){
   if(diamonds<5){ alert("Not enough diamonds!"); return; }
-  let pos = prompt("Which letter do you want revealed? (1-5)");
+  let pos = prompt(`Which letter do you want revealed? (1-${answer.length})`);
   if(!pos) return;
   pos = parseInt(pos);
-  if(pos<1||pos>5){ alert("Invalid position."); return; }
+  if(pos<1||pos>answer.length){ alert("Invalid position."); return; }
   diamonds -= 5;
   updateDiamonds();
   let letter = answer[pos-1];
@@ -262,12 +298,13 @@ function useHint(){
 
 // Popup
 function showPopup(word){
-  document.getElementById('popup-message').innerText=`Level failed! The word was: ${word}`;
+  document.getElementById('popup-message').innerText=`Failed! The word was: ${word}`;
   document.getElementById('popup').style.display='block';
 }
 function closePopup(){
   document.getElementById('popup').style.display='none';
   if(mode==='levels'){ if(currentLevel<49) startLevel(currentLevel+1); else document.getElementById('message').innerText="Game Over!"; }
+  else if(mode==='four'){ startFour(); }
 }
 
 // Letter Panel
@@ -296,18 +333,25 @@ function resetProgress(){
     localStorage.clear();
     stats.levels={total:0,best:null};
     stats.daily={total:0,best:null};
+    stats.four={total:0,best:null};
     diamonds=5;
     levelsCorrect=Array(50).fill(false);
     currentLevel=0;
     resetLetterStatus();
-    if(mode==='levels') startLevel(0); else startDaily();
+    fourUnlocked=false;
+    if(mode==='levels') startLevel(0); 
+    else if(mode==='daily') startDaily(); 
+    else startFour();
     updateStats(); updateDiamonds();
   }
 }
 
 // Start
 resetLetterStatus();
-if(mode==='levels') switchMode('levels'); else switchMode('daily');
+if(mode==='levels') switchMode('levels'); 
+else if(mode==='daily') switchMode('daily'); 
+else if(mode==='four' && fourUnlocked) switchMode('four'); 
+else switchMode('levels');
 </script>
 
 </body>
